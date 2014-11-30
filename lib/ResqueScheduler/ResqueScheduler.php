@@ -84,6 +84,13 @@ class ResqueScheduler
     {
         $timestamp = self::getTimestamp($timestamp);
         $redis = \Resque::redis();
+
+        if ($item['queue'] == 'notification') {
+            $key = "{$item['queue']}:{$item['args'][0][1]}";
+            $value = self::QUEUE_NAME . ':' . $timestamp;
+            $redis->hset("job_scheduled_store", $key, $value);
+        }
+
         $redis->rpush(self::QUEUE_NAME . ':' . $timestamp, json_encode($item));
 
         $redis->zadd(self::QUEUE_NAME, $timestamp, $timestamp);
