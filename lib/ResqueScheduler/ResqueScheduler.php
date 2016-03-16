@@ -2,11 +2,11 @@
 /**
 * ResqueScheduler core class to handle scheduling of jobs in the future.
 *
-* @package		ResqueScheduler
-* @author		Chris Boulton <chris@bigcommerce.com> (Original)
-* @author      Wan Qi Chen <kami@kamisama.me>
+* @package      ResqueScheduler
+* @author       Chris Boulton <chris@bigcommerce.com> (Original)
+* @author       Wan Qi Chen <kami@kamisama.me>
 * @copyright	(c) 2012 Chris Boulton
-* @license		http://www.opensource.org/licenses/mit-license.php
+* @license      http://www.opensource.org/licenses/mit-license.php
 */
 namespace ResqueScheduler;
 
@@ -129,15 +129,16 @@ class ResqueScheduler
      * also, this is an expensive operation because all delayed keys have tobe
      * searched
      *
-     * @param $queue
-     * @param $class
-     * @param $args
+     * @param string  $queue
+     * @param string  $class
+     * @param array   $args
+     * @param boolean $trackStatus
      * @return int number of jobs that were removed
      */
-    public static function removeDelayed($queue, $class, $args)
+    public static function removeDelayed($queue, $class, $args, $trackStatus)
     {
         $destroyed=0;
-        $item = json_encode(self::jobToHash($queue, $class, $args));
+        $item = json_encode(self::jobToHash($queue, $class, $args, $trackStatus));
         $redis = \Resque::redis();
 
         foreach ($redis->keys(self::QUEUE_NAME . ':*') as $key) {
@@ -213,9 +214,9 @@ class ResqueScheduler
     /**
      * Convert a timestamp in some format in to a unix timestamp as an integer.
      *
-     * @param  DateTime|int                              $timestamp Instance of DateTime or UNIX timestamp.
-     * @return int                                       Timestamp
-     * @throws ResqueScheduler_InvalidTimestampException
+     * @param \DateTime|int $timestamp Instance of DateTime or UNIX timestamp.
+     * @return int  Timestamp
+     * @throws \ResqueScheduler_InvalidTimestampException
      */
     private static function getTimestamp($timestamp)
     {
@@ -244,15 +245,19 @@ class ResqueScheduler
      *                                Defaults to now.
      * @return int|false UNIX timestamp, or false if nothing to run.
      */
-    public static function nextDelayedTimestamp($at = null)
+    public static function nextDelayedTimestamp($at = null, $future = false)
     {
         if ($at === null) {
-            $at = time();
+            $at = $future ? '+inf' : time();
         } else {
             $at = self::getTimestamp($at);
         }
 
-        $items = \Resque::redis()->zrangebyscore(self::QUEUE_NAME, '-inf', $at, array('limit', 0, 1));
+        if (class_exists('Redis')) {
+            $items = \Resque::redis()->zrangebyscore(self::QUEUE_NAME, '-inf', $at, array('limit' => array(0, 1)));
+        } else {
+            $items = \Resque::redis()->zrangebyscore(self::QUEUE_NAME, '-inf', $at, 'limit', 0, 1);
+        }
         if (!empty($items)) {
             return $items[0];
         }
